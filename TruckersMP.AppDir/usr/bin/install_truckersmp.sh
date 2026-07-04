@@ -443,8 +443,10 @@ main() {
     update_game_path
 
     echo "PROGRESS:100"
-    emit_info "TruckersMP installation completed"
+    echo "Starting TruckersMP Launcher"
     bash "$TRUCKERSMP_PATH/truckersmp-launcher.sh" || true
+
+    emit_info "TruckersMP installation completed"
 }
 
 main "$@"
