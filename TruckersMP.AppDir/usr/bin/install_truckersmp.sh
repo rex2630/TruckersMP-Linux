@@ -294,12 +294,12 @@ LAUNCHER_PID=""
 
 # Cleanup handler
 cleanup() {
-    if [ -n "\${LAUNCHER_PID:-}" ] && kill -0 "\$LAUNCHER_PID" 2>/dev/null; then
+    if [[ -n "\${LAUNCHER_PID:-}" ]] && kill -0 "\$LAUNCHER_PID" 2>/dev/null; then
         kill "\$LAUNCHER_PID" 2>/dev/null || true
         wait "\$LAUNCHER_PID" 2>/dev/null || true
     fi
 
-    if [ -n "\${IPC_BRIDGE_PID:-}" ] && kill -0 "\$IPC_BRIDGE_PID" 2>/dev/null; then
+    if [[ -n "\${IPC_BRIDGE_PID:-}" ]] && kill -0 "\$IPC_BRIDGE_PID" 2>/dev/null; then
         kill "\$IPC_BRIDGE_PID" 2>/dev/null || true
         wait "\$IPC_BRIDGE_PID" 2>/dev/null || true
     fi
@@ -307,15 +307,17 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-if [ -f "$IPC_BRIDGE_EXE" ]; then
-    "$PROTON_EXEC" run cmd /c start /b "" "$IPC_BRIDGE_EXE" >/dev/null 2>&1 &
+if [[ -f "\$IPC_BRIDGE_EXE" ]]; then
+    "$PROTON_EXEC" run "\$IPC_BRIDGE_EXE" >/dev/null 2>&1 &
+    IPC_BRIDGE_PID=\$!
 fi
 
-exec "$PROTON_EXEC" run "$TRUCKERSMP_PATH/TruckersMP-Launcher.exe" >/dev/null 2>&1
+"$PROTON_EXEC" run "$TRUCKERSMP_PATH/TruckersMP-Launcher.exe" >/dev/null 2>&1 &
 LAUNCHER_PID=\$!
 
 wait "\$LAUNCHER_PID"
 EOF
+
     chmod +x "$launcher_script"
 
     cat > "$menu_desktop_path" <<EOF
@@ -323,15 +325,16 @@ EOF
 Name=TruckersMP
 Exec=$launcher_script
 Type=Application
-StartupNotify=true
 Comment=Launcher for TruckersMP
 Path=$TRUCKERSMP_PATH
 StartupNotify=true
 Icon=260A_TruckersMP-Launcher.0
 StartupWMClass=truckersmp-launcher.exe
+Terminal=false
+Categories=Game;
 EOF
 
-    chmod +x "$menu_desktop_path"
+    chmod 644 "$menu_desktop_path"
     cp -f "$menu_desktop_path" "$desktop_shortcut_path"
     chmod +x "$desktop_shortcut_path"
 
