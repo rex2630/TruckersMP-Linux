@@ -1,9 +1,10 @@
 import sys
 import os
 import subprocess
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QPushButton, QPlainTextEdit, QProgressBar, QWidget, QMessageBox
 import re
+
+from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QPushButton, QPlainTextEdit, QProgressBar, QWidget, QMessageBox
 
 class InstallerThread(QThread):
     log_signal = pyqtSignal(str)
