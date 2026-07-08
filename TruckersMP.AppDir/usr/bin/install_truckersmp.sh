@@ -3,11 +3,9 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-readonly VERSION="2.2.0"
+readonly VERSION="1.1.0"
 readonly LOG_FILE="/tmp/truckersmp_installer.log"
 readonly TLM_DOWNLOAD_URL="https://github.com/3ventic/tlm/releases/latest/download/tlm-x86_64-unknown-linux-gnu"
-readonly DISCORD_BRIDGE_URL="https://raw.githubusercontent.com/rs189/TruckersMP-linux/main/TruckersMP.AppDir/usr/bin/winediscordipcbridge.exe"
-readonly DISCORD_BRIDGE_FILENAME="winediscordipcbridge.exe"
 readonly APP_ID_ETS2="227300"
 readonly APP_ID_ATS="270880"
 
@@ -67,7 +65,7 @@ require_non_root() {
 }
 
 check_dependencies() {
-    local deps=(curl chmod mkdir awk grep find sed tr realpath pgrep nohup)
+    local deps=(curl chmod mkdir awk grep find sed tr)
     local dep
 
     for dep in "${deps[@]}"; do
@@ -294,67 +292,6 @@ install_tlm() {
     "$TLM_BIN" install-steam-tool --steam-compat-path "$STEAM_COMPAT_PATH"
 }
 
-download_discord_bridge() {
-    local tool_dir="$STEAM_COMPAT_PATH/TLM"
-    local bridge_path="$tool_dir/$DISCORD_BRIDGE_FILENAME"
-
-    emit_info "Downloading Discord RPC bridge"
-    curl --fail --location --silent --show-error "$DISCORD_BRIDGE_URL" -o "$bridge_path"
-}
-
-install_discord_bridge_hook() {
-    local tool_dir="$STEAM_COMPAT_PATH/TLM"
-    local hook_dir="$tool_dir/prelaunch.d"
-    local hook_path="$hook_dir/10-discord-rpc-bridge.sh"
-
-    emit_info "Installing Discord RPC bridge hook"
-    mkdir -p "$hook_dir"
-
-    cat > "$hook_path" <<'EOF'
-#!/usr/bin/env bash
-set -Eeuo pipefail
-
-TOOLDIR="$(realpath "$(dirname "$0")/..")"
-BRIDGE_EXE="$TOOLDIR/winediscordipcbridge.exe"
-BRIDGE_WINE_PREFIX="$TOOLDIR/bridge-prefix"
-BRIDGE_LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/truckersmp-installer"
-BRIDGE_LOG_FILE="$BRIDGE_LOG_DIR/discord-bridge.log"
-
-mkdir -p "$BRIDGE_LOG_DIR"
-mkdir -p "$BRIDGE_WINE_PREFIX"
-
-if [[ ! -f "$BRIDGE_EXE" ]]; then
-    exit 0
-fi
-
-if [[ ! -S "/run/user/$(id -u)/discord-ipc-0" ]]; then
-    exit 0
-fi
-
-if pgrep -f "winediscordipcbridge.exe" >/dev/null 2>&1; then
-    exit 0
-fi
-
-if ! command -v umu-run >/dev/null 2>&1; then
-    exit 0
-fi
-
-if [[ -z "${PROTONPATH:-}" ]]; then
-    exit 0
-fi
-
-(
-    export WINEPREFIX="$BRIDGE_WINE_PREFIX"
-    export GAMEID="${GAMEID:-umu-0}"
-    nohup umu-run "$BRIDGE_EXE" >>"$BRIDGE_LOG_FILE" 2>&1 &
-) >/dev/null 2>&1 || true
-
-exit 0
-EOF
-
-    chmod +x "$hook_path"
-}
-
 verify_install() {
     local tool_dir="$STEAM_COMPAT_PATH/TLM"
 
@@ -363,8 +300,6 @@ verify_install() {
     [[ -f "$tool_dir/toolmanifest.vdf" ]] || { emit_error "Missing toolmanifest.vdf"; exit 1; }
     [[ -f "$tool_dir/tlm" ]] || { emit_error "Missing tlm binary in tool directory"; exit 1; }
     [[ -f "$tool_dir/tlm.sh" ]] || { emit_error "Missing tlm.sh launcher script"; exit 1; }
-    [[ -f "$tool_dir/$DISCORD_BRIDGE_FILENAME" ]] || { emit_error "Missing Discord RPC bridge executable"; exit 1; }
-    [[ -f "$tool_dir/prelaunch.d/10-discord-rpc-bridge.sh" ]] || { emit_error "Missing Discord RPC bridge hook"; exit 1; }
 
     emit_info "TLM installation verified successfully."
 }
@@ -374,7 +309,6 @@ print_summary() {
     emit_done "Steam variant: $STEAM_VARIANT"
     emit_done "Compatibility tools path: $STEAM_COMPAT_PATH"
     emit_done "Detected game: $SELECTED_GAME (AppID $SELECTED_APP_ID)"
-    emit_done "Discord Rich Presence bridge was installed."
     emit_done "Next step: restart Steam."
     emit_done "Then open Properties for $SELECTED_GAME -> Compatibility -> Force the use of a specific Steam Play compatibility tool -> select 'TruckersMP [TLM]'."
     emit_done "Finally, launch the game from Steam."
@@ -418,13 +352,9 @@ main() {
     progress 65
 
     download_tlm
-    progress 78
+    progress 80
 
     install_tlm
-    progress 88
-
-    download_discord_bridge
-    install_discord_bridge_hook
     progress 95
 
     verify_install
