@@ -3,9 +3,10 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-readonly VERSION="1.1.0"
+readonly VERSION="1.0.0"
 readonly LOG_FILE="/tmp/truckersmp_installer.log"
 readonly TLM_DOWNLOAD_URL="https://github.com/3ventic/tlm/releases/latest/download/tlm-x86_64-unknown-linux-gnu"
+readonly UMU_PROTON_API_URL="https://api.github.com/repos/Open-Wine-Components/umu-proton/releases/latest"
 readonly APP_ID_ETS2="227300"
 readonly APP_ID_ATS="270880"
 
@@ -65,7 +66,7 @@ require_non_root() {
 }
 
 check_dependencies() {
-    local deps=(curl chmod mkdir awk grep find sed tr)
+    local deps=(curl chmod mkdir awk grep find sed tr tar)
     local dep
 
     for dep in "${deps[@]}"; do
@@ -253,32 +254,97 @@ ensure_umu_run() {
     exit 1
 }
 
-check_proton_presence() {
+list_proton_candidates() {
     local proton_candidates=(
-        "$HOME/.steam/root/compatibilitytools.d"
         "$HOME/.local/share/Steam/compatibilitytools.d"
+        "$HOME/.steam/root/compatibilitytools.d"
         "$HOME/.steam/steam/compatibilitytools.d"
         "$HOME/.local/share/Steam/steamapps/common"
         "$HOME/.steam/steam/steamapps/common"
-        "$HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common"
+        "$HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam/compatibilitytools.d"
         "$HOME/.var/app/com.valvesoftware.Steam/.steam/root/compatibilitytools.d"
+        "$HOME/snap/steam/common/.local/share/Steam/compatibilitytools.d"
+        "$HOME/snap/steam/common/.steam/root/compatibilitytools.d"
     )
 
-    local found=0
     local base
     for base in "${proton_candidates[@]}"; do
         [[ -d "$base" ]] || continue
-        if find "$base" -maxdepth 1 -type d \( -name 'Proton 10*' -o -name 'Proton Experimental' -o -name 'GE-Proton*' -o -name 'UMU-Proton*' \) | grep -q .; then
-            found=1
-            break
-        fi
+        find "$base" -maxdepth 1 -mindepth 1 -type d \
+            \( -name 'UMU-Proton*' -o -name 'GE-Proton*' -o -name 'Proton 10*' -o -name 'Proton Experimental' \) \
+            2>/dev/null
     done
+}
 
-    if [[ "$found" -eq 1 ]]; then
-        emit_info "Detected at least one Proton or compatibility runtime."
-    else
-        emit_warn "No Proton runtime was detected automatically. Make sure Proton is installed in Steam and run the game at least once before using TruckersMP."
+have_compatible_proton() {
+    list_proton_candidates | grep -q .
+}
+
+install_umu_proton() {
+    local compat_dir="$HOME/.local/share/Steam/compatibilitytools.d"
+    local archive="$TMP_DIR/umu-proton.tar.gz"
+    local download_url
+
+    emit_info "No compatible Proton runtime detected. Attempting to install latest UMU-Proton."
+    mkdir -p "$compat_dir"
+
+    download_url="$(
+        curl --fail --silent --show-error --location "$UMU_PROTON_API_URL" \
+        | grep '"browser_download_url":' \
+        | grep -E 'UMU-Proton[^"]*\.tar\.(gz|xz|zst)' \
+        | head -n 1 \
+        | sed -E 's/.*"([^"]+)".*/\1/'
+    )"
+
+    if [[ -z "$download_url" ]]; then
+        emit_warn "Could not determine latest UMU-Proton download URL from GitHub API."
+        return 1
     fi
+
+    emit_info "Downloading latest UMU-Proton package."
+    curl --fail --location --silent --show-error "$download_url" -o "$archive"
+
+    emit_info "Extracting UMU-Proton into $compat_dir"
+    case "$download_url" in
+        *.tar.gz)
+            tar -xzf "$archive" -C "$compat_dir"
+            ;;
+        *.tar.xz)
+            tar -xJf "$archive" -C "$compat_dir"
+            ;;
+        *.tar.zst)
+            if command -v unzstd >/dev/null 2>&1; then
+                unzstd -c "$archive" | tar -xf - -C "$compat_dir"
+            elif command -v zstd >/dev/null 2>&1; then
+                zstd -dc "$archive" | tar -xf - -C "$compat_dir"
+            else
+                emit_warn "Downloaded a .tar.zst archive but neither unzstd nor zstd is available."
+                return 1
+            fi
+            ;;
+        *)
+            emit_warn "Unsupported UMU-Proton archive format."
+            return 1
+            ;;
+    esac
+
+    return 0
+}
+
+ensure_proton_runtime() {
+    if have_compatible_proton; then
+        emit_info "Detected at least one compatible Proton runtime."
+        return 0
+    fi
+
+    if install_umu_proton && have_compatible_proton; then
+        emit_info "UMU-Proton was installed successfully."
+        return 0
+    fi
+
+    emit_warn "No Proton runtime was detected automatically, and UMU-Proton could not be installed."
+    emit_warn "Make sure Proton or UMU-Proton is installed in Steam compatibilitytools.d and run the game at least once before using TruckersMP."
+    return 0
 }
 
 download_tlm() {
@@ -348,7 +414,7 @@ main() {
     ensure_umu_run
     progress 55
 
-    check_proton_presence
+    ensure_proton_runtime
     progress 65
 
     download_tlm
