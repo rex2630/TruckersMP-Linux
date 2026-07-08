@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+#===============================================================================
+# TruckersMP Installer for Linux
+# Version: 1.0.0
+# Original-Author: rs189
+# Edited by: rex2630
+# License: MIT
+#===============================================================================
+
 set -Eeuo pipefail
 IFS=$'\n\t'
 
